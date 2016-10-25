@@ -30,9 +30,9 @@ FCPPLIBS = -lstdc++
 
 LIB_DIR=$(OpenMM_INSTALL_DIR)/lib
 INCLUDE_DIR=$(OpenMM_INSTALL_DIR)/include
-LIBS= -lOpenMM
+LIBS= -lOpenMM -lOpenMMAmoeba
 
-ALL_CPP_EXAMPLES = HelloArgon HelloSodiumChloride HelloEthane HelloWaterBox
+ALL_CPP_EXAMPLES = HelloArgon HelloSodiumChloride HelloEthane HelloWaterBox Amoeba
 ALL_C_EXAMPLES   = HelloArgonInC HelloSodiumChlorideInC
 ALL_F95_EXAMPLES = HelloArgonInFortran HelloSodiumChlorideInFortran
 

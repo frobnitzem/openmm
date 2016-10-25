@@ -1,11 +1,11 @@
 /* -----------------------------------------------------------------------------
  *              OpenMM(tm) HelloWaterBox example in C++ (June 2009)
  * -----------------------------------------------------------------------------
- * This is a complete, self-contained "hello world" example demonstrating 
- * GPU-accelerated simulation of a system with both bonded and nonbonded forces, 
+ * This is a complete, self-contained "hello world" example demonstrating
+ * GPU-accelerated simulation of a system with both bonded and nonbonded forces,
  * using water (H-O-H) in a periodic box as an example. This is a constant-
- * temperature simulation using an Andersen thermostat. A multi-frame PDB file 
- * is written to stdout which can be read by VMD or other visualization tool to 
+ * temperature simulation using an Andersen thermostat. A multi-frame PDB file
+ * is written to stdout which can be read by VMD or other visualization tool to
  * produce an animation of the resulting trajectory.
  *
  * Pay particular attention to the handling of units in this example. Incorrect
@@ -22,11 +22,11 @@
 // -----------------------------------------------------------------------------
 //                                 MOCK MD CODE
 // -----------------------------------------------------------------------------
-// The code starting here and through main() below is meant to represent in 
-// simplified form some pre-existing molecular dynamics code, which defines its 
-// own data structures for force fields, the atoms in this simulation, and the 
-// simulation parameters, and takes care of recording the trajectory. All this 
-// has nothing to do with OpenMM; the OpenMM-dependent code comes later and is 
+// The code starting here and through main() below is meant to represent in
+// simplified form some pre-existing molecular dynamics code, which defines its
+// own data structures for force fields, the atoms in this simulation, and the
+// simulation parameters, and takes care of recording the trajectory. All this
+// has nothing to do with OpenMM; the OpenMM-dependent code comes later and is
 // clearly marked below.
 // -----------------------------------------------------------------------------
 
@@ -35,6 +35,7 @@ const int    NumWatersAlongEdge  = 10;     // Size of box is NxNxN waters.
 const double Temperature         = 300;    // Kelvins
 const double FrictionInPerPs     = 91.;    // collisions per picosecond
 const double CutoffDistanceInAng = 10.;    // Angstroms
+const double SwitchDistanceInAng = 8.;     // Angstroms
 
 const bool   UseConstraints      = true;   // Should we constrain O-H bonds?
 const double StepSizeInFs        = 2;      // integration step size (fs)
@@ -45,11 +46,6 @@ const double SimulationTimeInPs  = 10;     // total simulation time (ps)
 // For this example we're using a tiny subset of the Amber99 force field.
 // We want to keep the data in the original unit system to avoid conversion
 // bugs; this requires conversion on the way in and out of OpenMM.
-
-// Amber reduces nonbonded forces between 1-4 bonded atoms. (These won't be
-// used in our all-water simulation.)
-const double Coulomb14Scale      = 0.5;
-const double LennardJones14Scale = 0.5;
 
 // We only need force field parameters for water here.
 const double O_mass             = 15.9994;  // Daltons
@@ -74,12 +70,12 @@ const double HOH_stiffnessInKcalPerRad2 = 100.; // that is e=k(a-a0)^2
 // This is a PDB writer that only knows how to write out water molecules. It is
 // just here for this example and has nothing to do with OpenMM!
 static void
-myWritePDBFrame(int frameNum, double timeInPs, const std::vector<double>& atomPosInAng) 
+myWritePDBFrame(int frameNum, double timeInPs, const std::vector<double>& atomPosInAng)
 {
     const char* atomNames[] = {" O  ", " H1 ", " H2 "}; // cycle through these
     printf("MODEL     %d\n", frameNum);
     printf("REMARK 250 time=%.3f picoseconds\n", timeInPs);
-    for (int atom=0; atom < (int)atomPosInAng.size()/3; ++atom) 
+    for (int atom=0; atom < (int)atomPosInAng.size()/3; ++atom)
     {
         printf("HETATM%5d %4s HOH  %4d    ",        // start of pdb HETATM line
             atom+1, atomNames[atom%3], 1 + atom/3); // atom number, name, residue #
@@ -98,14 +94,14 @@ myWritePDBFrame(int frameNum, double timeInPs, const std::vector<double>& atomPo
 // program with OpenMM without the main program having any direct interaction
 // with the OpenMM API. This is a clean approach for interfacing with any MD
 // code, although the details of the interface routines will differ. This is
-// still just "locally written" code and is not required by OpenMM. Normally 
+// still just "locally written" code and is not required by OpenMM. Normally
 // these would be in another compilation unit but they are defined later in
 // this file.
 struct MyOpenMMData;
 static MyOpenMMData* myInitializeOpenMM(int    numWatersAlongEdge,
                                         double temperature,
                                         double frictionInPerPs,
-                                        double stepSizeInFs, 
+                                        double stepSizeInFs,
                                         std::string& platformName);
 static void          myStepWithOpenMM(MyOpenMMData*, int numSteps);
 static void          myGetOpenMMState(MyOpenMMData*, double& time,
@@ -123,8 +119,8 @@ int main() {
         std::string   platformName;
 
         // Set up OpenMM data structures; return handle and OpenMM Platform name.
-        MyOpenMMData* omm = myInitializeOpenMM(NumWatersAlongEdge, Temperature, 
-                                               FrictionInPerPs, StepSizeInFs, 
+        MyOpenMMData* omm = myInitializeOpenMM(NumWatersAlongEdge, Temperature,
+                                               FrictionInPerPs, StepSizeInFs,
                                                platformName); // output
 
         // Run the simulation:
@@ -144,8 +140,8 @@ int main() {
                 break;
 
             myStepWithOpenMM(omm, NumSilentSteps);
-        } 
- 
+        }
+
         // Clean up OpenMM data structures.
         myTerminateOpenMM(omm);
 
@@ -169,16 +165,16 @@ int main() {
 
 // Suppress irrelevant warnings from Microsoft's compiler.
 #ifdef _MSC_VER
-    #pragma warning(disable:4996)   // sprintf is unsafe 
+    #pragma warning(disable:4996)   // sprintf is unsafe
 #endif
 
-#include "OpenMM.h"
+#include <OpenMM.h>
 using OpenMM::Vec3; // so we can just say "Vec3" below
 
 
 // This is our opaque "handle" class containing all the OpenMM objects that
-// must persist from call to call during a simulation. The main program gets 
-// a pointer to one of these but sees it as essentially a void* since it 
+// must persist from call to call during a simulation. The main program gets
+// a pointer to one of these but sees it as essentially a void* since it
 // doesn't know the definition of this class.
 struct MyOpenMMData {
     MyOpenMMData() : system(0), context(0), integrator(0) {}
@@ -205,12 +201,12 @@ struct MyOpenMMData {
 //
 // Note that this function must understand the calling MD code's molecule and
 // force field data structures so will need to be customized for each MD code.
-static MyOpenMMData* 
+static MyOpenMMData*
 myInitializeOpenMM( int                 numWatersAlongEdge,
                     double              temperature,
                     double              frictionInPerPs,
-                    double              stepSizeInFs, 
-                    std::string&        platformName) 
+                    double              stepSizeInFs,
+                    std::string&        platformName)
 {
     // Load all available OpenMM plugins from their default location.
     OpenMM::Platform::loadPluginsFromDirectory
@@ -237,7 +233,7 @@ myInitializeOpenMM( int                 numWatersAlongEdge,
             temperature,      // kelvins
             frictionInPerPs); // collision frequency in 1/picoseconds
     system.addForce(&thermostat);
-    
+
     // Volume of one water is 30 Angstroms cubed;
     // Thus length in one dimension is cube-root of 30,
     // or 3.107 Angstroms or 0.3107 nanometers
@@ -246,10 +242,13 @@ myInitializeOpenMM( int                 numWatersAlongEdge,
     const double boxEdgeLengthInNm = WaterSizeInNm * numWatersAlongEdge;
 
     // Create periodic box
-    nonbond.setNonbondedMethod(OpenMM::NonbondedForce::CutoffPeriodic);
+    nonbond.setNonbondedMethod(OpenMM::NonbondedForce::PME);
+    nonbond.setUseDispersionCorrection(true);
     nonbond.setCutoffDistance(CutoffDistanceInAng * OpenMM::NmPerAngstrom);
+    nonbond.setSwitchingDistance(SwitchDistanceInAng * OpenMM::NmPerAngstrom);
+    nonbond.setEwaldErrorTolerance(1e-6);
     system.setDefaultPeriodicBoxVectors(Vec3(boxEdgeLengthInNm,0,0),
-                                  Vec3(0,boxEdgeLengthInNm,0), 
+                                  Vec3(0,boxEdgeLengthInNm,0),
                                   Vec3(0,0,boxEdgeLengthInNm));
 
     // Specify the atoms and their properties:
@@ -260,19 +259,19 @@ myInitializeOpenMM( int                 numWatersAlongEdge,
     // Create data structures to hold lists of initial positions and bonds
     std::vector<Vec3>                   initialPosInNm;
     std::vector< std::pair<int,int> >   bondPairs;
-    
+
     // Add water molecules one at a time in the NxNxN cubic lattice
     for (int latticeX = 0; latticeX < numWatersAlongEdge; ++latticeX)
     for (int latticeY = 0; latticeY < numWatersAlongEdge; ++latticeY)
     for (int latticeZ = 0; latticeZ < numWatersAlongEdge; ++latticeZ)
     {
         // Add parameters for one water molecule
-        
+
         // Add atom masses to system
         int  oIndex = system.addParticle(O_mass); // O
         int h1Index = system.addParticle(H_mass); // H1
         int h2Index = system.addParticle(H_mass); // H2
-        
+
         // Add atom charge, sigma, and stiffness to nonbonded force
         nonbond.addParticle( // Oxygen
                 O_charge,
@@ -286,7 +285,7 @@ myInitializeOpenMM( int                 numWatersAlongEdge,
                 H_charge,
                 H_vdwRadInAng     * OpenMM::NmPerAngstrom * OpenMM::SigmaPerVdwRadius,
                 H_vdwEnergyInKcal * OpenMM::KJPerKcal);
-        
+
         // Constrain O-H bond lengths or use harmonic forces.
         if (UseConstraints) {
             system.addConstraint(oIndex, h1Index,
@@ -296,31 +295,31 @@ myInitializeOpenMM( int                 numWatersAlongEdge,
         } else {
             // Add stretch parameters for two covalent bonds
             // Note factor of 2 for stiffness below because Amber specifies the constant
-            // as it is used in the harmonic energy term kx^2 with force 2kx; OpenMM wants 
+            // as it is used in the harmonic energy term kx^2 with force 2kx; OpenMM wants
             // it as used in the force term kx, with energy kx^2/2.
             bondStretch.addBond(oIndex, h1Index,
                     OH_nominalLengthInAng     * OpenMM::NmPerAngstrom,
-                    OH_stiffnessInKcalPerAng2 * 2 * OpenMM::KJPerKcal 
+                    OH_stiffnessInKcalPerAng2 * 2 * OpenMM::KJPerKcal
                         * OpenMM::AngstromsPerNm * OpenMM::AngstromsPerNm);
             bondStretch.addBond(oIndex, h2Index,
                     OH_nominalLengthInAng     * OpenMM::NmPerAngstrom,
-                    OH_stiffnessInKcalPerAng2 * 2 * OpenMM::KJPerKcal 
+                    OH_stiffnessInKcalPerAng2 * 2 * OpenMM::KJPerKcal
                         * OpenMM::AngstromsPerNm * OpenMM::AngstromsPerNm);
         }
 
         // Store bonds for exclusion list
         bondPairs.push_back(std::make_pair(oIndex, h1Index));
         bondPairs.push_back(std::make_pair(oIndex, h2Index));
-                    
+
         // Add bond bend parameters for one angle.
         // See note under bond stretch above regarding the factor of 2 here.
         bondBend.addAngle(h1Index, oIndex, h2Index,
                 HOH_nominalAngleInDeg      * OpenMM::RadiansPerDegree,
                 HOH_stiffnessInKcalPerRad2 * 2 * OpenMM::KJPerKcal);
-               
+
         // Location of this molecule in the lattice
-        Vec3 latticeVec(WaterSizeInNm * latticeX, 
-                        WaterSizeInNm * latticeY, 
+        Vec3 latticeVec(WaterSizeInNm * latticeX,
+                        WaterSizeInNm * latticeY,
                         WaterSizeInNm * latticeZ);
 
         // flip half the waters to prevent giant dipole
@@ -331,10 +330,10 @@ myInitializeOpenMM( int                 numWatersAlongEdge,
         initialPosInNm.push_back(Vec3(0.09572*flip,0,0) + latticeVec); // H1
         initialPosInNm.push_back(Vec3(-0.02397*flip,0.09267*flip,0) + latticeVec); // H2
     }
-    
+
     // Populate nonbonded exclusions
-    nonbond.createExceptionsFromBonds(bondPairs, Coulomb14Scale, LennardJones14Scale);    
-            
+    nonbond.createExceptionsFromBonds(bondPairs, 1.0, 1.0);
+
     // Choose an Integrator for advancing time, and a Context connecting the
     // System with the Integrator for simulation. Let the Context choose the
     // best available Platform. Initialize the configuration from the default
@@ -368,9 +367,9 @@ myGetOpenMMState(MyOpenMMData* omm, double& timeInPs,
 
 
 // -----------------------------------------------------------------------------
-//                     TAKE MULTIPLE STEPS USING OpenMM 
+//                     TAKE MULTIPLE STEPS USING OpenMM
 // -----------------------------------------------------------------------------
-static void 
+static void
 myStepWithOpenMM(MyOpenMMData* omm, int numSteps) {
     omm->integrator->step(numSteps);
 }
@@ -378,7 +377,7 @@ myStepWithOpenMM(MyOpenMMData* omm, int numSteps) {
 // -----------------------------------------------------------------------------
 //                     DEALLOCATE OpenMM OBJECTS
 // -----------------------------------------------------------------------------
-static void 
+static void
 myTerminateOpenMM(MyOpenMMData* omm) {
     delete omm;
 }
